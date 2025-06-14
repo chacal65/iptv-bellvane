@@ -11,26 +11,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Clonar repositório
-      uses: actions/checkout@v3
+      - name: Clonar repositório
+        uses: actions/checkout@v3
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Instalar dependências
-      run: |
-        pip install -r requirements.txt
-        python -m playwright install
+      - name: Instalar dependências
+        run: |
+          pip install -r requirements.txt
+          python -m playwright install
 
-    - name: Rodar captura_links.py
-      run: python captura_links.py
+      - name: Rodar captura_links.py
+        run: python captura_links.py
 
-    - name: Commit canais_temp.json
-      run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "actions@github.com"
-        git add canais_temp.json
-        git commit -m "Atualização automática"
-        git push https://${{ secrets.GH_TOKEN }}@github.com/chacal65/iptv-bellvane.git HEAD:main
+      - name: Commit canais_temp.json
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git fetch origin
+          git pull --rebase
+          git add canais_temp.json
+          git commit -m "Atualização automática do canais_temp.json" || echo "Nenhuma alteração para commitar"
+          git push
