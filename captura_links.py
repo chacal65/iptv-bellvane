@@ -2,47 +2,44 @@ from playwright.sync_api import sync_playwright
 import json
 import time
 
-with open('fontes.txt', 'r') as f:
-    urls = [linha.strip() for linha in f if linha.strip()]
+with open('fontes.txt', 'r') as file:
+    urls = [line.strip() for line in file.readlines()]
 
 resultado = {}
 
-def capturar_m3u8(url):
+def capturar_link(url):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context()
-        page = context.new_page()
-
-        links_encontrados = []
-
-        def intercepta_response(response):
-            if ".m3u8" in response.url:
-                links_encontrados.append(response.url)
-
-        page.on("response", intercepta_response)
+        navegador = p.chromium.launch(headless=True)
+        pagina = navegador.new_page()
 
         try:
-            page.goto(url, timeout=60000)
-            time.sleep(10)
+            pagina.goto(url, timeout=60000)
 
             try:
-                page.locator("button:has-text('×')").click(timeout=3000)
+                pagina.locator("button:has-text('X'), .close, .btn-close").first.click(timeout=5000)
             except:
                 pass
 
-        except:
-            pass
+            time.sleep(5)
 
-        browser.close()
-        return list(set(links_encontrados))
+            links = []
+            for req in pagina.context.request.finished():
+                link = req.url
+                if '.m3u8' in link:
+                    links.append(link)
+
+            return list(set(links))
+
+        except:
+            return []
+        finally:
+            navegador.close()
+
 
 for url in urls:
-    links = capturar_m3u8(url)
+    nome_canal = url.strip().split("/")[-1].upper() or "DESCONHECIDO"
 
-    nome_canal = url.strip('/').split('/')[-1].upper()
-    if nome_canal == "":
-        nome_canal = "SEM_NOME"
-
+    links = capturar_link(url)
     resultado[nome_canal] = {
         "site_fonte": url,
         "grupo": "Sem Grupo",
