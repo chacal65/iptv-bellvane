@@ -1,67 +1,79 @@
-from playwright.sync_api import sync_playwright
+import asyncio
+from playwright.async_api import async_playwright
 import json
-import time
+import os
 
-def capturar_links(url):
-    with sync_playwright() as p:
-        navegador = p.chromium.launch(headless=True)
-        pagina = navegador.new_page()
+# Carregar fontes
+with open('fontes.txt', 'r') as f:
+    fontes = [linha.strip() for linha in f if linha.strip()]
 
-        links_encontrados = []
+# Carregar canais existentes ou criar vazio
+if os.path.exists('canais_temp.json'):
+    with open('canais_temp.json', 'r') as f:
+        canais = json.load(f)
+else:
+    canais = {}
 
-        def interceptar_request(request):
-            if ".m3u8" in request.url and request.url.startswith("http"):
-                links_encontrados.append(request.url)
+async def captura():
+    async with async_playwright() as p:
+        navegador = await p.chromium.launch(headless=True)
+        contexto = await navegador.new_context()
+        pagina = await contexto.new_page()
 
-        pagina.on("request", interceptar_request)
+        for url in fontes:
+            print(f"Capturando {url}")
 
-        pagina.goto(url, timeout=60000)
+            try:
+                await pagina.goto(url, timeout=60000)
 
-        try:
-            elementos = [
-                "button[aria-label='Close']",
-                "button[class*='close']",
-                "div[class*='close']",
-                "text=✕",
-                "xpath=//button[contains(text(), 'X')]",
-                "xpath=//div[contains(text(), 'X')]"
-            ]
-            for seletor in elementos:
-                popup = pagina.locator(seletor)
-                if popup.is_visible():
-                    popup.click(timeout=5000)
-                    break
-        except:
-            pass
+                # Fechar pop-ups se tiver botão X
+                try:
+                    await pagina.click('button:has-text("×")', timeout=5000)
+                except:
+                    pass
 
-        tempo_maximo = time.time() + 60
-        while time.time() < tempo_maximo:
-            if links_encontrados:
-                break
-            time.sleep(1)
+                # Espera pelo player carregar
+                await pagina.wait_for_timeout(10000)
 
-        navegador.close()
-        return list(set(links_encontrados))
+                # Captura qualquer solicitação para arquivos .m3u8
+                link_m3u8 = None
 
-def processar_fontes(arquivo_fontes):
-    with open(arquivo_fontes, 'r') as f:
-        urls = f.read().splitlines()
+                def capturar_resposta(resposta):
+                    nonlocal link_m3u8
+                    if resposta.url.endswith('.m3u8'):
+                        link_m3u8 = resposta.url
 
-    resultado = {}
+                pagina.on('response', capturar_resposta)
 
-    for url in urls:
-        nome = url.strip().split('/')[-1].split('.')[0].upper()
-        links = capturar_links(url)
+                # Interage um pouco para garantir carregamento
+                await pagina.wait_for_timeout(5000)
 
-        resultado[nome] = {
-            "site_fonte": url,
-            "grupo": "Sem Grupo",
-            "logo": "",
-            "links": links if links else []
-        }
+                nome_canal = url.strip('/').split('/')[-1].upper()
+                if nome_canal == "":
+                    nome_canal = "CANAL"
 
-    with open('canais_temp.json', 'w', encoding='utf-8') as f:
-        json.dump(resultado, f, indent=2, ensure_ascii=False)
+                if nome_canal not in canais:
+                    canais[nome_canal] = {
+                        'site_fonte': url,
+                        'grupo': 'Sem Grupo',
+                        'logo': '',
+                        'links': []
+                    }
 
-if __name__ == "__main__":
-    processar_fontes('fontes.txt')
+                if link_m3u8 and link_m3u8 not in canais[nome_canal]['links']:
+                    canais[nome_canal]['links'].append(link_m3u8)
+                    print(f"Capturado: {link_m3u8}")
+                else:
+                    print(f"Nenhum link .m3u8 encontrado para {nome_canal}")
+
+            except Exception as e:
+                print(f"Erro ao capturar {url}: {e}")
+
+        await navegador.close()
+
+    # Salvar canais_temp.json
+    with open('canais_temp.json', 'w') as f:
+        json.dump(canais, f, indent=4, ensure_ascii=False)
+    print('Arquivo canais_temp.json atualizado.')
+
+asyncio.run(captura())
