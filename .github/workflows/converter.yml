@@ -33,6 +33,6 @@ jobs:
           git config --global user.email "actions@github.com"
           git fetch origin
           git reset --hard origin/main
-          git add canais_temp.json || true
-          git commit -m "Atualização automática do canais_temp.json" || echo "Nada para commitar"
-          git push || echo "Nada para enviar"
+          git add canais_temp.json
+          git commit -m "Atualização automática do canais_temp.json" || echo "Sem alterações"
+          git push https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/${{ github.repository }}.git
